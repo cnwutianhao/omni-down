@@ -1,0 +1,68 @@
+{
+  "name": "omnidown",
+  "productName": "OmniDown",
+  "version": "1.0.0",
+  "description": "全能下载器：BT 磁力链接 + HTTP 直链",
+  "type": "module",
+  "main": "src/main/main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac --dir",
+    "dist-dmg": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "dist:all": "electron-builder -mwl"
+  },
+  "dependencies": {
+    "webtorrent": "^3.0.21"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.wutianhao.omnidown",
+    "productName": "OmniDown",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dir"
+      ],
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Network;FileTransfer",
+      "icon": "build/icon.png"
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "node-datachannel@0.32.3": true,
+    "utp-native@2.5.3": true,
+    "bufferutil@4.1.0": true,
+    "utf-8-validate@6.0.6": true,
+    "ip-set@3.0.0": true
+  }
+}

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+    <title>OmniDown</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script>
+      // 平台标记：macOS 隐藏标题栏需要为红绿灯留白，其他平台不需要
+      document.documentElement.dataset.platform =
+        navigator.userAgent.includes('Mac') ? 'mac' : 'other';
+    </script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="titlebar">
+        <div class="brand">
+          <span class="logo">▼</span>
+          <span class="brand-name">OmniDown</span>
+        </div>
+        <div class="global-stats">
+          <span class="stat down" title="总下载速度">
+            <svg viewBox="0 0 16 16" width="12" height="12"><path d="M8 12.5 3 7.5h3.2V3h3.6v4.5H13z" fill="currentColor"/></svg>
+            <b id="gs-down">0 B/s</b>
+          </span>
+          <span class="stat up" title="总上传速度">
+            <svg viewBox="0 0 16 16" width="12" height="12"><path d="M8 3.5 13 8.5h-3.2V13H6.2V8.5H3z" fill="currentColor"/></svg>
+            <b id="gs-up">0 B/s</b>
+          </span>
+          <span class="stat" id="gs-count">0 个任务</span>
+          <button class="speed-btn" id="speed-btn" title="限速设置">
+            <svg viewBox="0 0 16 16" width="13" height="13"><path d="M8 1a7 7 0 0 1 7 7c0 1.7-.6 3.2-1.6 4.4l-1.2-1.2A5.5 5.5 0 1 0 8 2.5c-.4 0-.8 0-1.2.1L5.6 1.4A7 7 0 0 1 8 1zm0 4a3 3 0 0 1 3 3c0 .8-.3 1.5-.8 2l-4.2-4.2c.5-.5 1.2-.8 2-.8zM2.2.8l13 13-1.2 1.2-1.6-1.6A7 7 0 0 1 8 15a7 7 0 0 1-7-7c0-1.9.8-3.7 2-5L1 1.9 2.2.8z" fill="currentColor"/></svg>
+            <span id="speed-label">不限速</span>
+          </button>
+          <button class="speed-btn" id="chart-btn" title="速度图表">
+            <svg viewBox="0 0 16 16" width="13" height="13"><path d="M1 13.5 5.5 8l3 3.5L14 4v9.5H1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+            <span>图表</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="body">
+        <aside class="sidebar">
+          <nav class="filters">
+            <button class="filter active" data-filter="all">
+              <span>全部</span><em id="c-all">0</em>
+            </button>
+            <button class="filter" data-filter="active">
+              <span>下载中</span><em id="c-active">0</em>
+            </button>
+            <button class="filter" data-filter="done">
+              <span>已完成</span><em id="c-done">0</em>
+            </button>
+            <button class="filter" data-filter="paused">
+              <span>已暂停</span><em id="c-paused">0</em>
+            </button>
+          </nav>
+
+          <div class="side-foot">
+            <div class="side-label">保存到</div>
+            <button class="dir-btn" id="dir-btn" title="点击更改下载目录">
+              <span id="dir-text">—</span>
+            </button>
+          </div>
+        </aside>
+
+        <section class="content">
+          <div class="addbar">
+            <div class="input-wrap">
+              <svg class="input-icon" viewBox="0 0 16 16" width="14" height="14"><path d="M6.5 10a3.5 3.5 0 0 1 0-5l2-2a3.5 3.5 0 1 1 5 5l-1 1-1-1 1-1a2 2 0 1 0-3-3l-2 2a2 2 0 0 0 0 3zm3-4a3.5 3.5 0 0 1 0 5l-2 2a3.5 3.5 0 1 1-5-5l1-1 1 1-1 1a2 2 0 1 0 3 3l2-2a2 2 0 0 0 0-3z" fill="currentColor"/></svg>
+              <input id="magnet-input" type="text" placeholder="粘贴下载链接：HTTP/HTTPS 直链、磁力链接或 40 位 info hash，回车添加（支持多个）" spellcheck="false" />
+            </div>
+            <button class="btn primary" id="add-btn">添加</button>
+            <button class="btn ghost" id="file-btn" title="打开本地 .torrent 种子文件">种子文件</button>
+          </div>
+
+          <div class="list" id="list">
+            <div class="empty" id="empty">
+              <div class="empty-art">🌀</div>
+              <h2>还没有任务</h2>
+              <p>粘贴下载链接（HTTP 直链 / 磁力链接），或把 <code>.torrent</code> 文件拖到这里</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="statusbar">
+        <span id="status-text">就绪</span>
+        <span class="spacer"></span>
+        <span id="status-hint"></span>
+      </footer>
+    </div>
+
+    <div class="toasts" id="toasts"></div>
+
+    <!-- 限速设置弹窗 -->
+    <div class="modal-mask" id="speed-modal" hidden>
+      <div class="modal">
+        <h3>限速设置</h3>
+        <div class="modal-row">
+          <label>下载限速</label>
+          <input type="number" id="limit-down" min="0" step="64" placeholder="0 = 不限" />
+          <span class="unit">KB/s</span>
+        </div>
+        <div class="modal-row">
+          <label>上传限速</label>
+          <input type="number" id="limit-up" min="0" step="64" placeholder="0 = 不限" />
+          <span class="unit">KB/s</span>
+        </div>
+        <p class="modal-hint">留空或填 0 表示不限速。限速只影响 OmniDown 自身流量。</p>
+        <div class="modal-actions">
+          <button class="btn ghost" id="speed-cancel">取消</button>
+          <button class="btn primary" id="speed-save">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 文件选择弹窗 -->
+    <div class="modal-mask" id="files-modal" hidden>
+      <div class="modal wide">
+        <h3 id="files-title">文件列表</h3>
+        <div class="files-list" id="files-list"></div>
+        <div class="modal-actions">
+          <button class="btn ghost" id="files-cancel">取消</button>
+          <button class="btn primary" id="files-save">应用</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 速度图表弹窗 -->
+    <div class="modal-mask" id="chart-modal" hidden>
+      <div class="modal wide">
+        <h3>速度图表</h3>
+        <div class="chart-tabs" id="chart-tabs"></div>
+        <canvas id="chart-canvas" width="960" height="360"></canvas>
+        <div class="chart-legend">
+          <span class="lg down"><i></i>下载</span>
+          <span class="lg up"><i></i>上传</span>
+          <span class="spacer"></span>
+          <span id="chart-now"></span>
+        </div>
+        <div class="modal-actions">
+          <button class="btn primary" id="chart-close">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <template id="row-template">
+      <article class="row">
+        <div class="ring"><svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15.5"/><circle class="ring-fg" cx="18" cy="18" r="15.5"/></svg><span class="ring-txt">0%</span></div>
+        <div class="row-main">
+          <div class="row-head">
+            <span class="row-name">—</span>
+            <span class="row-badge"></span>
+          </div>
+          <div class="bar"><div class="bar-fill"></div></div>
+          <div class="row-meta">
+            <span class="m-size">—</span>
+            <span class="m-speed"></span>
+            <span class="m-peers"></span>
+            <span class="m-eta"></span>
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="icon-btn act-play" title="播放（边下边播）" style="display:none">
+            <svg viewBox="0 0 16 16" width="15" height="15"><path d="M4.5 2.8 13 8l-8.5 5.2z" fill="currentColor"/></svg>
+          </button>
+          <button class="icon-btn act-toggle" title="暂停 / 继续"></button>
+          <button class="icon-btn act-files" title="选择要下载的文件" style="display:none">
+            <svg viewBox="0 0 16 16" width="15" height="15"><path d="M3 1.5h7l3 3v10H3z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M5.5 7h5M5.5 9.5h5M5.5 12h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </button>
+          <button class="icon-btn act-folder" title="打开文件夹">
+            <svg viewBox="0 0 16 16" width="15" height="15"><path d="M1.5 3.5h4l1.2 1.5h7.8v7.5h-13z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="icon-btn act-more" title="更多">
+            <svg viewBox="0 0 16 16" width="15" height="15"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </article>
+    </template>
+    <script src="renderer.js"></script>
+  </body>
+</html>
