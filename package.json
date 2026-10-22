@@ -6,6 +6,9 @@
   "type": "module",
   "main": "src/main/main.js",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --mac --dir",
@@ -16,6 +19,9 @@
   },
   "dependencies": {
     "webtorrent": "^3.0.21"
+  },
+  "overrides": {
+    "node-datachannel": "0.33.4"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -59,7 +65,6 @@
   },
   "allowScripts": {
     "electron@33.4.11": true,
-    "node-datachannel@0.32.3": true,
     "utp-native@2.5.3": true,
     "bufferutil@4.1.0": true,
     "utf-8-validate@6.0.6": true,
