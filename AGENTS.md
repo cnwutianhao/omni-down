@@ -10,6 +10,18 @@
 - 平台：macOS / Windows / Linux
 - 语言：纯 JavaScript（ESM，`"type": "module"`），无 TypeScript、无构建步骤
 
+## 依赖与安装（改依赖前必读）
+
+- **`node-datachannel` 被 `overrides` 钉在 `0.33.4`，不要随意移除**。
+  - `0.32.x` 及更早的 install 脚本是 `prebuild-install || (… prebuild)`：从 GitHub Releases 下载二进制。
+    国内网络下载失败后会回退到已废弃的 `prebuild@13`，在 Node ≥ 22 上直接崩（`expected first argument to be an array`）。
+  - `0.33.x` 改成 **npm 平台分包**（`@node-datachannel/linux-x64-gnu` 等），走 registry 而非 GitHub，不再有 install 脚本。
+  - 它是 `webtorrent → @thaunknown/simple-peer → webrtc-polyfill` 的传递依赖，不会出现在 `dependencies` 里。
+- `.npmrc` 里的 `electron_mirror` / `electron_builder_binaries_mirror` 不能删：国内直连 GitHub 会 `ECONNRESET`。
+  npm 11 会对这两个非标准键打 `Unknown project config` 警告，属预期行为。
+- `.npmrc` 的 `cache` 用 `~` 展开，不要改回绝对路径（mac 上写死的 `/Users/...` 在 Linux 会直接 EACCES）。
+- `package.json` 的 `allowScripts` 是 npm 11 的脚本白名单，新增/升级带 install 脚本的包时要同步补条目。
+
 ## 目录结构
 
 ```
@@ -122,4 +134,5 @@ docs: 补充跨平台打包说明
 
 - 国内网络：GitHub 直连不稳定；npm/Electron 二进制用 npmmirror 镜像（见 `.npmrc` 与 README）
 - 应用未签名：macOS 分发需用户 `xattr -cr` 去隔离；Windows SmartScreen 会警告
-- 用户数据目录：`~/Library/Application Support/OmniDown/`（含从 TorrentFlow 的一次性迁移逻辑，勿删）
+- 用户数据目录：`app.getPath('userData')` — mac `~/Library/Application Support/OmniDown/`、
+  Windows `%APPDATA%\OmniDown\`、Linux `~/.config/OmniDown/`（含从 TorrentFlow 的一次性迁移逻辑，勿删）

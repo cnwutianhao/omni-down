@@ -28,6 +28,19 @@ npm install
 npm start
 ```
 
+> 需要 **Node.js ≥ 22**（WebTorrent 3.x 要求）。
+> 国内网络（npm / Electron 二进制）走 npmmirror 镜像，配置已在 `.npmrc` 里备好，无需额外设置。
+
+### Linux 首次运行
+
+Electron 在 Linux 上需要一批系统库（`libnss3`、`libgtk-3`、`libgbm`、`libasound2` 等）。
+Ubuntu / Debian 上如遇启动失败，先装一遍：
+
+```bash
+sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+  libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 libpangocairo-1.0-0
+```
+
 ## 打包成桌面应用
 
 ```bash
@@ -48,7 +61,10 @@ npm run dist:linux  # Linux：生成 AppImage + deb（需在 Linux 上执行）
 src/
 ├── main/
 │   ├── main.js            # Electron 主进程：窗口、IPC、系统集成
-│   └── torrent-engine.js  # BT 引擎：基于 WebTorrent，负责下载/状态/持久化
+│   ├── torrent-engine.js  # BT 引擎：基于 WebTorrent，负责下载/状态/持久化
+│   ├── http-engine.js     # HTTP 直链引擎：多线程分块/断点续传/队列/限速
+│   ├── disk-monitor.js    # 磁盘空间监控
+│   └── speed-history.js   # 速度历史采样
 ├── preload/
 │   └── preload.cjs        # 安全桥接（contextBridge）
 └── renderer/
@@ -59,9 +75,21 @@ src/
 
 ## 数据存放位置
 
-- 任务列表：`~/Library/Application Support/OmniDown/torrents.json`
-- 设置：`~/Library/Application Support/OmniDown/settings.json`
-- 默认下载目录：`~/Downloads/OmniDown`
+用户数据目录（`app.getPath('userData')`）随平台不同：
+
+| 平台 | 路径 |
+|---|---|
+| macOS | `~/Library/Application Support/OmniDown/` |
+| Windows | `%APPDATA%\OmniDown\` |
+| Linux | `~/.config/OmniDown/` |
+
+目录内文件：
+
+- `torrents.json` — BT 任务列表
+- `http-tasks.json` — HTTP 任务列表与分块进度
+- `settings.json` — 下载目录、限速、做种限制
+
+默认下载目录：用户「下载」目录下的 `OmniDown` 子目录。
 
 ## 说明
 
