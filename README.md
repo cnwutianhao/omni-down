@@ -50,14 +50,20 @@ sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
 ```bash
 npm run dist        # macOS：生成 OmniDown.app（release/mac/）
 npm run dist-dmg    # macOS：生成 .dmg 安装包
-npm run dist:win    # Windows：生成 NSIS 安装包（release/*.exe，需在 Windows 上执行）
-npm run dist:linux  # Linux：生成 AppImage + deb（需在 Linux 上执行）
-npm run dist:all    # 三平台全打（-mwl，仍需在对应系统上分别执行或配合 CI）
+npm run dist:win    # Windows：生成 NSIS 安装包（release/*.exe）
+npm run dist:linux  # Linux：生成 AppImage + deb
 ```
 
-> Electron 原生模块（含 `node-datachannel`）不支持交叉编译：
-> Windows 安装包要在 Windows 上打，Linux 包要在 Linux 上打，macOS 包要在 macOS 上打。
-> 也可以用 GitHub Actions 在三个平台上自动打包。
+> **为什么不能一个平台打三个包？**
+> Electron 原生模块（含 `node-datachannel`）是按平台和 CPU 架构编译的二进制，
+> electron-builder 无法交叉编译它们。因此 macOS / Windows / Linux 包都必须在对应系统上打。
+>
+> `npm run dist:all`（即 `electron-builder -mwl`）**在 macOS 以外的系统上会直接报错退出**
+> （`Build for macOS is supported only on macOS`），遇到第一个不支持的目标就中止，
+> 不会退化成「只打当前平台」。
+>
+> 想一次性产出三平台安装包，只能在三个系统上分别执行，或用 CI（如 GitHub Actions）
+> 在各自的原生 runner 上并行构建 —— 但需要自备仓库和账号，本项目未附带工作流配置。
 
 各平台安装方式：
 
