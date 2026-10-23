@@ -118,6 +118,7 @@ src/
 
 | 项目 | macOS | Windows | Linux |
 |---|---|---|---|
+| 最低系统版本 | macOS 13 Ventura（Intel / Apple Silicon） | Windows 10（x64） | Ubuntu 20.04 / Debian 11 / Fedora 32 及以上（x64，glibc ≥ 2.30） |
 | 窗口标题栏 | 隐藏标题栏 + 左上角红绿灯（`titleBarStyle: hiddenInset`） | 系统原生标题栏 | 系统原生标题栏 |
 | 打开所在文件夹 | 访达 Finder | 资源管理器 | 默认文件管理器（Nautilus / Dolphin / Thunar 等，取决于桌面环境） |
 | 剪贴板自动识别 | ⌘V | Ctrl+V | Ctrl+V |
