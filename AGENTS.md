@@ -129,7 +129,12 @@ perf: 速度图表降采样到 120 点
 docs: 补充跨平台打包说明
 ```
 
-一次提交只做一件事；大功能拆成多个 commit。提交前跑最小验证集。
+一次提交只做一件事；大功能拆成多个 commit。
+
+- **提交与推送由人类执行**：AI 只按上述格式给出建议的消息文本，不自行 `git commit` / `git push`。
+- **最小验证集按改动范围区分**（脚本清单见「测试」一节）：
+  - 引擎 / IPC / 持久化改动：跑 `repro-p0-p1.mjs` + `http-engine-test.mjs` + `stability-test.mjs`
+  - 纯渲染层改动（`styles.css` / `index.html` / 仅涉及样式与布局的 `renderer.js`）：启动应用目视确认即可，不必跑引擎测试
 
 ## 已知注意事项
 
