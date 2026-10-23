@@ -147,8 +147,23 @@ html[data-platform="other"] .titlebar { padding: 0 18px; }
 .list::-webkit-scrollbar-thumb:hover { background: #33415f; background-clip: content-box; }
 
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; color: var(--muted); text-align: center; }
-.empty-art { font-size: 40px; filter: saturate(0.7); animation: spin 9s linear infinite; }
+/* 内联 SVG 螺旋：三平台字形一致。笔画较粗以还原 🌀 的厚重感；中心留小孔 */
+.empty-art {
+  width: 72px; height: 72px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 7.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.92;
+  filter: drop-shadow(0 0 14px rgba(74, 168, 255, 0.28));
+  animation: spin 9s linear infinite;
+  transform-origin: 50% 50%;
+}
 @keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .empty-art { animation: none; }
+}
 .empty h2 { font-size: 15px; font-weight: 600; color: #b9c6da; }
 .empty p { font-size: 12.5px; }
 .empty code { background: rgba(255, 255, 255, 0.08); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
