@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,20 @@ import { DiskSpaceMonitor } from './disk-monitor.js';
 import { SpeedHistory } from './speed-history.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * 开发模式下的窗口图标。
+ * - Windows：用多尺寸 .ico（16/24/32/48/64/128/256），由 scripts/gen-icon-ico.mjs 生成
+ * - Linux：窗口管理器通常只接受 PNG，回退到 2048px master
+ * - macOS：不使用（Dock 图标来自 .app 包，窗口无独立图标）
+ * 打包后该选项只是重复设置，实际图标已由 electron-builder 写入可执行文件。
+ * 注意 package.json 的 build.files 只包含 src 与 package.json，build/ 不进 asar，
+ * 因此打包后这里的路径通常不存在，由 fs.existsSync 守卫跳过。
+ */
+const ICON_PATH =
+  process.platform === 'win32'
+    ? path.join(__dirname, '../../build/icon.ico')
+    : path.join(__dirname, '../../build/icon.png');
 
 /** @type {BrowserWindow|null} */
 let win = null;
@@ -62,6 +76,64 @@ function saveSettings() {
   }
 }
 
+/**
+ * 按平台设置应用菜单。
+ *
+ * - Windows / Linux：菜单内嵌在窗口顶部，会占掉约 20px 高度，且默认项全是英文调试功能
+ *   （Reload / Toggle DevTools / Zoom…），对最终用户没有意义 → 直接移除。
+ *   代价是 Ctrl+R / F12 失效；开发调试请用 `--remote-debugging-port=9222`。
+ * - macOS：菜单栏在系统屏幕顶部，不占窗口空间；更重要的是它承载了 ⌘C / ⌘V / ⌘X / ⌘Q / ⌘W
+ *   等标准快捷键（由 role 提供）。设为 null 会让输入框里的 ⌘V 粘贴失效 —— 而粘贴链接是本应用
+ *   的主要入口，因此必须保留菜单，只把默认英文菜单换成中文精简版。
+ *
+ * 注意：判断只用 process.platform，与 CPU 架构无关。Intel Mac 与 Apple Silicon 都是 'darwin'，
+ * 菜单差异来自操作系统的窗口系统模型，不是芯片（process.arch 是 x64 / arm64 的另一维度）。
+ */
+function setupMenu() {
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about', label: `关于 ${app.name}` },
+        { type: 'separator' },
+        { role: 'hide', label: `隐藏 ${app.name}` },
+        { role: 'hideOthers', label: '隐藏其他' },
+        { role: 'unhide', label: '全部显示' },
+        { type: 'separator' },
+        { role: 'quit', label: `退出 ${app.name}` }
+      ]
+    },
+    {
+      label: '编辑',
+      submenu: [
+        { role: 'undo', label: '撤销' },
+        { role: 'redo', label: '重做' },
+        { type: 'separator' },
+        { role: 'cut', label: '剪切' },
+        { role: 'copy', label: '复制' },
+        { role: 'paste', label: '粘贴' },
+        { role: 'selectAll', label: '全选' }
+      ]
+    },
+    {
+      label: '窗口',
+      submenu: [
+        { role: 'minimize', label: '最小化' },
+        { role: 'zoom', label: '缩放' },
+        { type: 'separator' },
+        { role: 'close', label: '关闭窗口' }
+      ]
+    }
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow() {
   const isMac = process.platform === 'darwin';
 
@@ -75,6 +147,10 @@ function createWindow() {
     ...(isMac
       ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 20 } }
       : {}),
+    // 窗口/任务栏图标：仅开发模式下生效。
+    // 打包后由 electron-builder 把 build/icon.ico 写进 exe 资源段，此处无副作用。
+    // macOS 忽略该选项（Dock 图标来自 .app 包）。
+    ...(!isMac && fs.existsSync(ICON_PATH) ? { icon: ICON_PATH } : {}),
     backgroundColor: '#0b0e14',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.cjs'),
@@ -450,6 +526,7 @@ app.whenReady().then(async () => {
   }
 
   registerIpc();
+  setupMenu();
   createWindow();
 
   app.on('activate', () => {
