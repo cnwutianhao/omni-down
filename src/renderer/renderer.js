@@ -58,6 +58,19 @@ function fmtBytes(n) {
   const v = n / 1024 ** i;
   return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(v >= 10 ? 1 : 2)} ${u[i]}`;
 }
+
+/**
+ * 按当前操作系统返回系统术语（platform.js 写入 html[data-os]）。
+ * 仅用于面向用户的文案，逻辑判断仍应以主进程的 process.platform 为准。
+ */
+const OS = document.documentElement.dataset.os || 'linux';
+/** 「在文件管理器中显示」在各平台的说法 */
+const OS_TERMS = {
+  mac: { reveal: '在访达中显示', fileManager: '访达' },
+  win: { reveal: '在资源管理器中显示', fileManager: '资源管理器' },
+  linux: { reveal: '在文件管理器中显示', fileManager: '文件管理器' }
+};
+const terms = OS_TERMS[OS] || OS_TERMS.linux;
 function fmtSpeed(n) {
   return n > 0 ? `${fmtBytes(n)}/s` : '—';
 }
@@ -201,7 +214,7 @@ function createRow(t) {
     menu.className = 'menu';
     menu.innerHTML = `
       <button data-act="copy">复制下载链接</button>
-      <button data-act="folder">在访达中显示</button>
+      <button data-act="folder">${terms.reveal}</button>
       <button data-act="remove" class="danger">移除任务（保留文件）</button>
       <button data-act="remove-files" class="danger">移除任务并删除文件</button>`;
     document.body.appendChild(menu);
