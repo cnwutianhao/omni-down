@@ -1,7 +1,8 @@
 # OmniDown ⬇️
 
 一个基于 **Electron + WebTorrent** 的全能下载器：BT 磁力链接 + HTTP 直链双引擎。
-支持 **macOS / Windows / Linux** 三平台。
+完整支持 **macOS / Windows / Linux** 三平台，界面与功能一致，仅系统集成细节随平台自动适配
+（详见「[平台适配](#平台适配)」）。
 
 ## 功能
 
@@ -15,10 +16,10 @@
 - ✅ **边下边播**（下载中即可用系统播放器播放，本地 HTTP 流媒体）
 - ✅ 卡住原因智能提示（死种/分享者离线/带宽受限自动诊断）
 - ✅ 自定义下载目录（记忆上次选择）
-- ✅ 在访达中打开 / 显示文件
+- ✅ 打开所在文件夹 / 定位文件（macOS 访达 · Windows 资源管理器 · Linux 默认文件管理器）
 - ✅ 移除任务（可选是否删除已下载文件）
 - ✅ 退出后自动保存任务列表，下次启动自动恢复
-- ✅ ⌘V 自动识别剪贴板中的磁力链接
+- ✅ ⌘V（macOS）/ Ctrl+V（Windows、Linux）自动识别剪贴板中的磁力链接
 - ✅ 点击任务名可复制磁力链接
 
 ## 开发运行
@@ -28,7 +29,8 @@ npm install
 npm start
 ```
 
-> 需要 **Node.js ≥ 22**（WebTorrent 3.x 要求）。
+> 需要 **Node.js ≥ 22**（WebTorrent 3.x 的 `engines` 要求，macOS / Windows / Linux 一致）。
+> 实际运行时应用跑在 Electron 内置的 Node 上（Electron 33 → Node 20），已验证 WebTorrent 3.x 工作正常。
 > 国内网络（npm / Electron 二进制）走 npmmirror 镜像，配置已在 `.npmrc` 里备好，无需额外设置。
 
 ### Linux 首次运行
@@ -43,17 +45,27 @@ sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
 
 ## 打包成桌面应用
 
+各平台分别打包（Electron 不支持交叉打包，见下方说明）：
+
 ```bash
 npm run dist        # macOS：生成 OmniDown.app（release/mac/）
 npm run dist-dmg    # macOS：生成 .dmg 安装包
-npm run dist:win    # Windows：生成 NSIS 安装包（需在 Windows 上执行）
+npm run dist:win    # Windows：生成 NSIS 安装包（release/*.exe，需在 Windows 上执行）
 npm run dist:linux  # Linux：生成 AppImage + deb（需在 Linux 上执行）
+npm run dist:all    # 三平台全打（-mwl，仍需在对应系统上分别执行或配合 CI）
 ```
 
-> Electron 不支持交叉打包：Windows 安装包要在 Windows 上打，Linux 包要在 Linux 上打。
+> Electron 原生模块（含 `node-datachannel`）不支持交叉编译：
+> Windows 安装包要在 Windows 上打，Linux 包要在 Linux 上打，macOS 包要在 macOS 上打。
 > 也可以用 GitHub Actions 在三个平台上自动打包。
 
-打包完成后把 `release/mac/OmniDown.app` 拖到 `/Applications` 即可双击使用。
+各平台安装方式：
+
+| 平台 | 产物 | 安装 / 运行方式 |
+|---|---|---|
+| macOS | `release/mac/OmniDown.app`、`.dmg` | 把 `OmniDown.app` 拖到 `/Applications` 后双击；未签名版本首次运行需执行 `xattr -cr /Applications/OmniDown.app` |
+| Windows | `release/*.exe`（NSIS） | 双击安装包按向导安装；未签名版本首次运行会被 SmartScreen 拦截，需点「更多信息 → 仍要运行」 |
+| Linux | `release/*.AppImage`、`.deb` | AppImage：`chmod +x` 后直接运行；deb：`sudo dpkg -i <包名>.deb` |
 
 ## 项目结构
 
@@ -70,6 +82,7 @@ src/
 └── renderer/
     ├── index.html         # 界面结构
     ├── styles.css         # 深色玻璃拟态样式
+    ├── platform.js        # 平台标记（macOS / 其他，供 CSS 区分标题栏留白）
     └── renderer.js        # 界面逻辑
 ```
 
@@ -89,10 +102,32 @@ src/
 - `http-tasks.json` — HTTP 任务列表与分块进度
 - `settings.json` — 下载目录、限速、做种限制
 
-默认下载目录：用户「下载」目录下的 `OmniDown` 子目录。
+默认下载目录：系统「下载」目录下的 `OmniDown` 子目录
+（`app.getPath('downloads')`，三平台自动解析，Windows 通常为 `C:\Users\<用户名>\Downloads\OmniDown`）。
+
+## 平台适配
+
+核心功能（BT / HTTP 下载、限速、文件选择、边下边播、任务持久化）三平台完全一致，
+以下细节由 Electron 按平台自动适配，无需用户配置：
+
+| 项目 | macOS | Windows | Linux |
+|---|---|---|---|
+| 窗口标题栏 | 隐藏标题栏 + 左上角红绿灯（`titleBarStyle: hiddenInset`） | 系统原生标题栏 | 系统原生标题栏 |
+| 打开所在文件夹 | 访达 Finder | 资源管理器 | 默认文件管理器（Nautilus / Dolphin / Thunar 等，取决于桌面环境） |
+| 剪贴板自动识别 | ⌘V | Ctrl+V | Ctrl+V |
+| 用户数据目录 | `~/Library/Application Support/OmniDown/` | `%APPDATA%\OmniDown\` | `~/.config/OmniDown/` |
+| 默认下载目录 | `~/Downloads/OmniDown/` | `%USERPROFILE%\Downloads\OmniDown\` | `~/Downloads/OmniDown/` |
+| 打包产物 | `.app` / `.dmg` | NSIS `.exe` | `.AppImage` / `.deb` |
+| 应用图标 | `build/icon.png` | `build/icon.ico` | `build/icon.png` |
+
+> 界面字体栈已包含 macOS（`-apple-system` / `SF Pro Text` / `PingFang SC`）、
+> Windows（`Segoe UI` / `Microsoft YaHei`）、Linux（回退到系统默认无衬线字体）三套。
+> 空状态等图标使用内联 SVG 而非 emoji 字符，避免各平台 emoji 字体字形不一致。
+
+Linux 首次运行可能缺少 Electron 依赖的系统库，见上方「[Linux 首次运行](#linux-首次运行)」。
 
 ## 说明
 
-- 内置 8 个公共 tracker，并启用 DHT，有助于提高找 peer 的成功率。
+- 内置 10 个公共 tracker（UDP / HTTP / WebSocket 混合），并启用 DHT，有助于提高找 peer 的成功率。
 - 下载速度取决于种子的健康度（种子数/做种人数），冷门资源可能很慢甚至下不动。
 - 仅供学习与个人合法用途，请勿用于下载侵犯版权的内容。
