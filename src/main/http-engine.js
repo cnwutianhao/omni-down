@@ -57,6 +57,9 @@ export class HttpEngine extends EventEmitter {
 
     // 恢复上次会话：正在下载的自动续传，暂停的保持暂停
     const saved = await this._loadState();
+    // 以状态文件为准重建任务表：stop() 后再 start() 时，丢弃内存里的旧任务对象。
+    // 必须放在读取之后同步执行，避免 await 期间触发的防抖保存把空列表写回状态文件。
+    this.tasks.clear();
     for (const s of saved) {
       const task = {
         ...s,
@@ -89,10 +92,13 @@ export class HttpEngine extends EventEmitter {
     this.timer = null;
     for (const task of this.tasks.values()) {
       task._pauseRequested = true;
+      task._starting = false;
       this._abortTask(task);
       this._closeFd(task);
     }
     await this._saveState();
+    // 允许 stop() 之后再次 start()（否则 start 会直接返回，定时器与广播不再恢复）
+    this.started = false;
   }
 
   // ------------------------------------------------------------- 公开操作
@@ -134,6 +140,7 @@ export class HttpEngine extends EventEmitter {
     if (!task) return false;
     if (!['probing', 'queued', 'downloading'].includes(task.status)) return false;
     task._pauseRequested = true;
+    task._starting = false; // 释放调度预留的名额，让排队任务能补上
     this._abortTask(task);
     this._closeFd(task);
     task.status = 'paused';
@@ -246,28 +253,40 @@ export class HttpEngine extends EventEmitter {
 
   // ------------------------------------------------------------- 调度
 
-  /** 队列感知启动：有空位才真正开跑，否则排队 */
+  /**
+   * 队列感知启动：有空位才真正开跑，否则排队。
+   * 名额在这里同步预留（_starting），而不是等 setTimeout 触发后状态变为 downloading 才算：
+   * 否则批量添加时多个任务在延迟窗口内都会通过检查，并发数突破 MAX_ACTIVE。
+   */
   _schedule(id, delay = 0) {
     const task = this.tasks.get(id);
-    if (!task) return;
-    const active = [...this.tasks.values()].filter((t) => t.status === 'downloading').length;
+    if (!task || task._starting) return; // 已预留名额、启动在途，避免重复调度
+    const active = [...this.tasks.values()].filter(
+      (t) => t.status === 'downloading' || t._starting
+    ).length;
     if (active >= MAX_ACTIVE && task.status !== 'downloading') {
       task.status = 'queued';
       this._broadcast();
       return;
     }
+    task._starting = true;
     setTimeout(() => {
       const t = this.tasks.get(id);
-      if (!t || t._removeRequested) return;
-      // 用户已请求暂停/任务已不在可下载状态 → 不启动
-      if (t._pauseRequested || !['paused', 'queued', 'probing'].includes(t.status)) return;
+      if (!t) return; // 已被删除：remove() 已负责提升队列
+      t._starting = false;
+      // 用户已请求暂停/删除，或任务已不在可下载状态 → 不启动，并把名额让给排队任务
+      if (t._removeRequested || t._pauseRequested || !['paused', 'queued', 'probing'].includes(t.status)) {
+        this._promoteQueue();
+        return;
+      }
+      // _download 在首个 await 之前同步把状态置为 downloading，名额无缝衔接
       this._download(t).catch(() => {});
     }, delay);
   }
 
   /** 有任务结束/暂停后，提升队首任务 */
   _promoteQueue() {
-    const next = [...this.tasks.values()].find((t) => t.status === 'queued');
+    const next = [...this.tasks.values()].find((t) => t.status === 'queued' && !t._starting);
     if (next) this._schedule(next.id, 200);
   }
 

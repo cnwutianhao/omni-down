@@ -97,6 +97,8 @@ export class TorrentEngine extends EventEmitter {
 
     // 恢复上一次会话
     const saved = await this._loadState();
+    // 以状态文件为准重建记录：stop() 后再 start() 时，旧记录会让 finalize 误判为“已登记”而跳过事件绑定
+    this.records.clear();
     for (const item of saved) {
       if (!item?.uri) continue;
       try {
@@ -118,10 +120,14 @@ export class TorrentEngine extends EventEmitter {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     await this._saveState();
+    // 流媒体服务器挂在旧 client 上，client 销毁后不能复用
+    this.stopStream();
     if (this.client) {
       await new Promise((resolve) => this.client.destroy(resolve));
       this.client = null;
     }
+    // 允许 stop() 之后再次 start()（否则 start 会直接返回，client 与定时器都不会重建）
+    this.started = false;
   }
 
   // ---------------------------------------------------------------- 公开操作
