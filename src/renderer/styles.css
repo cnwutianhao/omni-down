@@ -343,6 +343,11 @@ body.dragover .list { outline: 2px dashed rgba(74, 168, 255, 0.6); outline-offse
   font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums;
 }
 .file-item.skipped { opacity: 0.45; }
+/* 播放模式下被选中要播的那个文件 */
+.file-item.playing {
+  background: rgba(74, 168, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(74, 168, 255, 0.45);
+}
 
 /* ---------------------------------------------------------------- 速度图表 */
 .chart-tabs { display: flex; gap: 6px; margin-bottom: 12px; }

@@ -440,9 +440,11 @@ document.querySelectorAll('.filter').forEach((btn) => {
 
 // ---------------------------------------------------------------- 文件选择弹窗
 function openFilesModal(t, mode) {
-  filesEditing = { hash: t.infoHash, mode, selections: new Map() };
+  filesEditing = { hash: t.infoHash, mode, selections: new Map(), picked: -1 };
   el.filesTitle.textContent = t.name || '文件列表';
   el.filesList.innerHTML = '';
+  // 播放模式下按钮语义不同：选文件是为了播它，不是为了勾选下载
+  el.filesSave.textContent = mode === 'play' ? '播放选中文件' : '应用';
 
   for (const f of t.fileDetails || []) {
     const item = document.createElement('label');
@@ -457,6 +459,21 @@ function openFilesModal(t, mode) {
       filesEditing.selections.set(Number(cb.dataset.index), cb.checked);
       item.classList.toggle('skipped', !cb.checked);
     });
+    // 播放模式：点文件名直接选中这一个（不受勾选状态影响）
+    if (mode === 'play') {
+      const nameEl = item.querySelector('.f-name');
+      nameEl.style.cursor = 'pointer';
+      nameEl.title = `${f.name}（点击选中播放）`;
+      nameEl.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        filesEditing.picked = f.index;
+        el.filesList
+          .querySelectorAll('.file-item')
+          .forEach((n) => n.classList.remove('playing'));
+        item.classList.add('playing');
+      });
+    }
     el.filesList.appendChild(item);
   }
   el.filesModal.hidden = false;
@@ -464,7 +481,25 @@ function openFilesModal(t, mode) {
 
 el.filesSave.addEventListener('click', async () => {
   if (!filesEditing) return closeModals();
-  const { hash, selections } = filesEditing;
+  const { hash, selections, mode, picked } = filesEditing;
+
+  // 播放模式：播用户点选的文件；没点选则回退到第一个已下载/已勾选的文件
+  if (mode === 'play') {
+    const details = state.torrents.find((t) => t.infoHash === hash)?.fileDetails || [];
+    const fallback =
+      details.find((f) => f.selected && f.progress > 0) || details.find((f) => f.selected);
+    const index = picked >= 0 ? picked : fallback?.index ?? 0;
+    filesEditing = null;
+    closeModals();
+    const res = await api.play(hash, index);
+    if (!res.ok && res.error) toast(res.error, 'error');
+    else if (res.ok) {
+      toast(res.local ? '已用系统播放器打开本地文件' : '已启动边下边播（用系统播放器打开）', 'success');
+    }
+    return;
+  }
+
+  // 选择模式：提交勾选结果
   if (selections.size > 0) {
     const list = [...selections.entries()].map(([index, selected]) => ({ index, selected }));
     const res = await api.setFileSelection(hash, list);

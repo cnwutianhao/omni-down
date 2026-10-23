@@ -15,26 +15,36 @@ export class SpeedHistory {
   constructor() {
     /** key -> [{ t, down, up }] */
     this.buffers = new Map(WINDOWS.map((w) => [w.key, []]));
-    this._acc = { down: 0, up: 0, n: 0, since: Date.now() };
+    /** key -> 该窗口上一次写入的时间戳（每个窗口按自己的间隔稀疏写入） */
+    this._lastWrite = new Map(WINDOWS.map((w) => [w.key, 0]));
+    // since 在首次 push 时用当次传入的 now 初始化：
+    // 若在构造里用 Date.now()，而调用方注入 nowMs（测试/时钟偏移），
+    // elapsed 会变负，导致永远不结算、所有窗口都收不到数据。
+    this._acc = { down: 0, up: 0, n: 0, since: 0 };
   }
 
   /** 每秒由外部喂入当前速度（字节/秒）；nowMs 可注入用于测试 */
   push(downBps, upBps, nowMs) {
     const now = nowMs ?? Date.now();
+    if (!this._acc.since) this._acc.since = now; // 首次调用对齐到调用方的时间轴
     this._acc.down += downBps;
     this._acc.up += upBps;
     this._acc.n += 1;
 
     const elapsed = now - this._acc.since;
-    // 到达最小采样窗（1s）时，结算一次平均值并写入所有窗口
+    // 到达最小采样窗（1s）时，结算一次平均值并写入各窗口
     if (elapsed >= WINDOWS[0].sampleMs) {
       const avgDown = Math.round(this._acc.down / this._acc.n);
       const avgUp = Math.round(this._acc.up / this._acc.n);
       for (const w of WINDOWS) {
-        // 高档位窗口按自己的采样间隔稀疏写入
-        if (elapsed < w.sampleMs && w.key !== WINDOWS[0].key) continue;
+        // 各窗口按自己的采样间隔稀疏写入：距该窗口上次写入不足间隔则跳过。
+        // 注意不能用 elapsed（距上次结算的时间，恒 ≈1s）来判断，否则
+        // 30m/6h/12h/24h 永远满足不了条件、永远收不到数据。
+        const last = this._lastWrite.get(w.key) || 0;
+        if (last && now - last < w.sampleMs) continue;
         const buf = this.buffers.get(w.key);
         buf.push({ t: now, down: avgDown, up: avgUp });
+        this._lastWrite.set(w.key, now);
         const cutoff = now - w.spanMs;
         while (buf.length && buf[0].t < cutoff) buf.shift();
       }

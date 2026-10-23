@@ -5,11 +5,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
     <title>OmniDown</title>
     <link rel="stylesheet" href="styles.css" />
-    <script>
-      // 平台标记：macOS 隐藏标题栏需要为红绿灯留白，其他平台不需要
-      document.documentElement.dataset.platform =
-        navigator.userAgent.includes('Mac') ? 'mac' : 'other';
-    </script>
+    <script src="platform.js"></script>
   </head>
   <body>
     <div class="app">

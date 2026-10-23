@@ -5,6 +5,8 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 
 const TICK_MS = 800;
+/** 延迟落盘的防抖窗口（与 HttpEngine 保持一致） */
+const SAVE_DEBOUNCE = 800;
 
 /**
  * 补充公共 tracker。
@@ -98,7 +100,12 @@ export class TorrentEngine extends EventEmitter {
     for (const item of saved) {
       if (!item?.uri) continue;
       try {
-        this._add(item.uri, { path: item.path, paused: !!item.paused, silent: true });
+        this._add(item.uri, {
+          path: item.path,
+          paused: !!item.paused,
+          silent: true,
+          deselected: item.deselected
+        });
       } catch (err) {
         this.emit('notice', { type: 'warn', text: `恢复失败：${err.message}` });
       }
@@ -306,7 +313,7 @@ export class TorrentEngine extends EventEmitter {
 
   // ---------------------------------------------------------------- 内部实现
 
-  _add(uri, { path: targetPath, paused = false, silent = false } = {}) {
+  _add(uri, { path: targetPath, paused = false, silent = false, deselected = [] } = {}) {
     if (!this.client) throw new Error('引擎尚未启动');
 
     const existingHash = this._hashOf(uri);
@@ -337,8 +344,22 @@ export class TorrentEngine extends EventEmitter {
         uri: isBuffer ? torrent.magnetURI || this._toMagnet(torrent) : String(uri),
         path: savePath,
         paused,
-        addedAt: Date.now()
+        addedAt: Date.now(),
+        // 恢复上次的文件勾选状态（重启后不要重新下被取消的文件）
+        ...(Array.isArray(deselected) && deselected.length ? { deselected: [...deselected] } : {})
       });
+
+      // 文件列表就绪后补一次 deselect（元数据可能晚于本次调用才到）
+      if (Array.isArray(deselected) && deselected.length) {
+        const applyDeselect = () => {
+          for (const i of deselected) {
+            const f = torrent.files?.[i];
+            if (f && typeof f.deselect === 'function') f.deselect();
+          }
+        };
+        if (torrent.files?.length) applyDeselect();
+        else torrent.once('metadata', applyDeselect);
+      }
 
       torrent.on('error', (err) => {
         if (!silent) this.emit('notice', { type: 'error', text: `${err?.message || err}` });
@@ -495,6 +516,7 @@ export class TorrentEngine extends EventEmitter {
       return;
     }
     this._saving = true;
+    this._dirty = false;
     const data = [...this.records.entries()].map(([infoHash, rec]) => ({
       infoHash,
       uri: rec.uri,
@@ -509,12 +531,25 @@ export class TorrentEngine extends EventEmitter {
       const tmp = this.stateFile + '.tmp';
       await fsp.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
       await fsp.rename(tmp, this.stateFile);
-      this._dirty = false;
     } catch {
       // 持久化失败不影响使用
     } finally {
       this._saving = false;
+      // 保存期间又有变更（或本次失败）→ 稍后补一次
       if (this._dirty) this._saveStateSoon();
     }
+  }
+
+  /** 延迟合并保存：短时间内多次变更只落盘一次（与 HttpEngine 同名方法语义一致） */
+  _saveStateSoon(immediate = false) {
+    this._dirty = true;
+    if (this._saveTimer) return;
+    this._saveTimer = setTimeout(
+      () => {
+        this._saveTimer = null;
+        this._saveState();
+      },
+      immediate ? 0 : SAVE_DEBOUNCE
+    );
   }
 }

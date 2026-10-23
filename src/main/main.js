@@ -321,7 +321,11 @@ function registerIpc() {
     if (!next) return { ok: false, error: '目录为空' };
     settings.downloadDir = next;
     saveSettings();
+    // 两个引擎都要更新，否则换目录后 HTTP 任务仍存旧目录
     engine.setDownloadDir(next);
+    httpEngine.setDownloadDir(next);
+    // 磁盘监控也要跟着看新目录
+    diskMonitor?.setPaths([next]);
     return { ok: true, dir: next };
   });
 

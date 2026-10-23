@@ -3,6 +3,7 @@ import { DiskSpaceMonitor } from '../src/main/disk-monitor.js';
 import { SpeedHistory } from '../src/main/speed-history.js';
 import { TorrentEngine } from '../src/main/torrent-engine.js';
 import fs from 'node:fs';
+import os from 'node:os';
 
 let pass = 0;
 let fail = 0;
@@ -12,7 +13,8 @@ const check = (name, ok, detail = '') => {
 };
 
 console.log('━━━ ① 磁盘空间监控（qBittorrent: 30s 周期）━━━');
-const mon = new DiskSpaceMonitor(['/Users/wutianhao/Downloads']);
+// 用当前平台的下载目录，避免写死 macOS 路径导致其它平台必然失败
+const mon = new DiskSpaceMonitor([os.homedir()]);
 mon.check();
 const info = mon.summary();
 check('能读取磁盘空间', info.free > 0, info.text);

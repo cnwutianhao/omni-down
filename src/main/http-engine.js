@@ -189,6 +189,18 @@ export class HttpEngine extends EventEmitter {
     return task?.dir || this.downloadDir;
   }
 
+  /**
+   * 切换默认下载目录（仅对新任务生效，正在下载的任务保持原目录）。
+   * 与 TorrentEngine.setDownloadDir 保持同名同语义，供 main.js 统一调用。
+   */
+  setDownloadDir(dir) {
+    const next = String(dir || '').trim();
+    if (!next) return false;
+    this.downloadDir = next;
+    fs.mkdirSync(next, { recursive: true });
+    return true;
+  }
+
   // ------------------------------------------------------------- 探测
 
   /** GET Range:0-0 探测：大小 / Range 支持 / 文件名（一次请求全拿到） */
@@ -434,21 +446,31 @@ export class HttpEngine extends EventEmitter {
 
   // ------------------------------------------------------------- 限速（令牌桶）
 
+  /**
+   * 令牌桶限速。
+   * 关键点：桶容量必须至少容纳「一次请求的数据量」n，否则当 limit < n 时
+   * （例如限速 10KB/s 而单次读到 64KB）永远凑不够令牌 → 下载永久卡死。
+   * 同时为了限速精度，容量取 max(limit, n)：既不会卡死，也不会因为桶太小
+   * 而把有效速率压到远低于设定值。
+   */
   async _throttle(n) {
     const limit = this.limits.down;
     if (!limit || limit <= 0) return;
+    const capacity = Math.max(limit, n);
     for (;;) {
       const now = Date.now();
       const elapsed = now - this._lastRefill;
-      if (elapsed >= 100) {
-        this._tokens = Math.min(this._tokens + (limit * elapsed) / 1000, limit);
+      if (elapsed > 0) {
+        this._tokens = Math.min(this._tokens + (limit * elapsed) / 1000, capacity);
         this._lastRefill = now;
       }
       if (this._tokens >= n) {
         this._tokens -= n;
         return;
       }
-      await sleep(40);
+      // 差多少令牌就睡多久，避免固定 40ms 轮询带来的额外延迟与抖动
+      const need = n - this._tokens;
+      await sleep(Math.min(200, Math.max(5, Math.ceil((need / limit) * 1000))));
     }
   }
 
