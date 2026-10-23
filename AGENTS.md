@@ -88,12 +88,13 @@ build/                 # 打包资源：icon.png (mac/linux)、icon.ico (win)
 | `qb-features-test.mjs` | 磁盘监控/速度历史/做种限制 15 项 |
 | `verify-features.mjs` | BT 文件选择/流媒体验证 |
 | `repro-p0-p1.mjs` | 并发保存崩溃/小限速死锁/图表时间窗/deselected 恢复 4 项回归 |
+| `repro-schedule-restart.mjs` | HTTP 批量添加不突破并发上限 / stop 后再 start 能恢复 7 项回归 |
 | `ui-test.mjs` / `ui-test-features.mjs` | UI 自动化（需 `--remote-debugging-port=9222` 启动应用） |
 | `test-server.mjs` | 本地测试 HTTP 服务器（压测依赖） |
 
 改完引擎代码的最小验证集：
 ```bash
-node scripts/repro-p0-p1.mjs && node scripts/http-engine-test.mjs && node scripts/stability-test.mjs 50
+node scripts/repro-p0-p1.mjs && node scripts/repro-schedule-restart.mjs && node scripts/http-engine-test.mjs && node scripts/stability-test.mjs 50
 ```
 
 ## 打包
@@ -137,7 +138,7 @@ docs: 补充跨平台打包说明
 
 - **提交与推送由人类执行**：AI 只按上述格式给出建议的消息文本，不自行 `git commit` / `git push`。
 - **最小验证集按改动范围区分**（脚本清单见「测试」一节）：
-  - 引擎 / IPC / 持久化改动：跑 `repro-p0-p1.mjs` + `http-engine-test.mjs` + `stability-test.mjs`
+  - 引擎 / IPC / 持久化改动：跑 `repro-p0-p1.mjs` + `repro-schedule-restart.mjs` + `http-engine-test.mjs` + `stability-test.mjs`
   - 纯渲染层改动（`styles.css` / `index.html` / 仅涉及样式与布局的 `renderer.js`）：启动应用目视确认即可，不必跑引擎测试
 
 ## 已知注意事项
