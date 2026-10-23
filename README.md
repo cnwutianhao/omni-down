@@ -118,13 +118,26 @@ src/
 | 用户数据目录 | `~/Library/Application Support/OmniDown/` | `%APPDATA%\OmniDown\` | `~/.config/OmniDown/` |
 | 默认下载目录 | `~/Downloads/OmniDown/` | `%USERPROFILE%\Downloads\OmniDown\` | `~/Downloads/OmniDown/` |
 | 打包产物 | `.app` / `.dmg` | NSIS `.exe` | `.AppImage` / `.deb` |
-| 应用图标 | `build/icon.png` | `build/icon.ico` | `build/icon.png` |
+| 应用图标 | `build/icon.png` | `build/icon.ico`（多尺寸） | `build/icon.png` |
 
 > 界面字体栈已包含 macOS（`-apple-system` / `SF Pro Text` / `PingFang SC`）、
 > Windows（`Segoe UI` / `Microsoft YaHei`）、Linux（回退到系统默认无衬线字体）三套。
 > 空状态等图标使用内联 SVG 而非 emoji 字符，避免各平台 emoji 字体字形不一致。
 
 Linux 首次运行可能缺少 Electron 依赖的系统库，见上方「[Linux 首次运行](#linux-首次运行)」。
+
+### 重新生成图标
+
+`build/icon.png` 是 master（2048px），`build/icon.ico` 由它派生。改了 PNG 后重新生成 Windows 图标：
+
+```bash
+node scripts/gen-icon-ico.mjs                              # 默认 build/icon.png → build/icon.ico
+node scripts/gen-icon-ico.mjs path/to/src.png out.ico       # 也可指定路径
+```
+
+会输出 16 / 24 / 32 / 48 / 64 / 128 / 256 七种尺寸（256 用 PNG 条目，其余用 BMP），
+这是 Windows 标题栏、任务栏、资源管理器、桌面所必需的——缺尺寸时系统会缩放导致发糊。
+脚本纯 Node 实现（只用内置 `zlib`），三平台都能跑，无需安装依赖。
 
 ## 说明
 

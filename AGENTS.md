@@ -106,7 +106,11 @@ npm run dist:linux  # Linux（需在 Linux 上跑）
 
 - 国内网络需要：`export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`
 - Electron 不支持交叉打包（原生模块），各平台各自打
-- 图标：`build/icon.png`（1024px，Apple 规范圆角）/ `icon.ico`（win）
+- 图标：`build/icon.png`（2048px master，8-bit RGBA）/ `build/icon.ico`（Windows，含 16/24/32/48/64/128/256 七种尺寸）
+  - `scripts/gen-icon-ico.mjs` 从 `icon.png` 重新生成多尺寸 ICO，**纯 Node 实现（只用内置 zlib），三平台都能跑**。
+    Windows 的标题栏 / 任务栏 / 资源管理器 / 桌面分别取不同尺寸，ICO 缺尺寸时系统会缩放导致发糊。
+  - `scripts/gen-icon.js` 是早期用 macOS `osascript` + Cocoa 画 master PNG 的脚本，**只能跑在 macOS 上**；
+    在 Windows / Linux 上改图标请直接替换 `icon.png` 后再跑 `gen-icon-ico.mjs`。
 
 ## Git 提交规范
 
