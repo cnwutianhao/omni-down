@@ -4,6 +4,8 @@
 完整支持 macOS / Windows / Linux 三平台，界面与功能一致，仅系统集成细节随平台自动适配
 （详见「[平台适配](#平台适配)」）。
 
+![OmniDown 界面](docs/screenshot.png)
+
 ## 功能
 
 - ✅ 粘贴链接即下载：HTTP/HTTPS 直链、磁力链接、40 位 info hash 混贴均可（一次多个）
