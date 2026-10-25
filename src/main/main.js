@@ -51,9 +51,15 @@ function mergedState() {
       count: btStats.count + httpStats.count,
       active: btStats.active + httpStats.active,
       done: btStats.done + httpStats.done,
-      limits: btStats.limits
+      // 以设置为准：两个引擎共用这一份限速，BT 引擎未就绪时也能正确显示
+      limits: settings.limits || btStats.limits
     }
   };
+}
+
+/** 向界面推送一条提示（窗口已关闭时静默丢弃） */
+function notify(payload) {
+  if (win && !win.isDestroyed()) win.webContents.send('t:notice', payload);
 }
 
 function loadSettings() {
@@ -285,13 +291,19 @@ function registerIpc() {
     const u = Number(up);
     const dn = Number.isFinite(d) ? d : -1;
     const un = Number.isFinite(u) ? u : -1;
-    const ok = engine.setSpeedLimit(dn, un);
+    // HTTP 引擎限速不会失败；BT 引擎在 client 未就绪时返回 false
+    const btOk = engine.setSpeedLimit(dn, un);
     httpEngine.setSpeedLimit(dn);
-    if (ok) {
-      settings.limits = { down: dn, up: un };
-      saveSettings();
-    }
-    return { ok };
+    settings.limits = { down: dn, up: un };
+    saveSettings();
+    const kb = (n) => (n < 0 ? '不限' : `${Math.round(n / 1024)} KB/s`);
+    notify({
+      type: btOk ? 'info' : 'warn',
+      text: btOk
+        ? `限速已更新：↓ ${kb(dn)} · ↑ ${kb(un)}`
+        : `限速已保存，BT 引擎未就绪，将在下次启动时生效`
+    });
+    return { ok: true };
   });
 
   // ---- 文件选择下载 ----
@@ -469,12 +481,8 @@ app.whenReady().then(async () => {
   };
   engine.on('update', forward);
   httpEngine.on('update', forward);
-  engine.on('notice', (payload) => {
-    if (win && !win.isDestroyed()) win.webContents.send('t:notice', payload);
-  });
-  httpEngine.on('notice', (payload) => {
-    if (win && !win.isDestroyed()) win.webContents.send('t:notice', payload);
-  });
+  engine.on('notice', notify);
+  httpEngine.on('notice', notify);
 
   try {
     await engine.start();
@@ -492,19 +500,9 @@ app.whenReady().then(async () => {
   diskMonitor.onChange = (info) => {
     const gb = (n) => (n / 1024 ** 3).toFixed(1);
     if (info.level === 'critical') {
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('t:notice', {
-          type: 'error',
-          text: `磁盘空间严重不足！剩余仅 ${gb(info.free)} GB，下载可能失败`
-        });
-      }
+      notify({ type: 'error', text: `磁盘空间严重不足！剩余仅 ${gb(info.free)} GB，下载可能失败` });
     } else if (info.level === 'warn') {
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('t:notice', {
-          type: 'warn',
-          text: `磁盘剩余空间偏低：${gb(info.free)} GB`
-        });
-      }
+      notify({ type: 'warn', text: `磁盘剩余空间偏低：${gb(info.free)} GB` });
     }
   };
   diskMonitor.start();
@@ -516,9 +514,10 @@ app.whenReady().then(async () => {
     speedHistory.push(s.downloadSpeed, s.uploadSpeed);
   }, 1000);
 
-  // 恢复上次的限速设置
+  // 恢复上次的限速设置（两个引擎都要恢复，之前只恢复了 BT，HTTP 重启后变成不限速）
   if (settings.limits) {
     engine.setSpeedLimit(settings.limits.down ?? -1, settings.limits.up ?? -1);
+    httpEngine.setSpeedLimit(settings.limits.down ?? -1);
   }
   // 恢复做种限制
   if (settings.shareLimits) {

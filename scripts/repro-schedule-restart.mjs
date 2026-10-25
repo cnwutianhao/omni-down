@@ -44,7 +44,8 @@ e.setSpeedLimit(2 * 1024 * 1024);
 const ids = [];
 for (let i = 0; i < 8; i++) ids.push(e.add(`${base}/f${i}.bin`));
 let peak = 0;
-for (let i = 0; i < 300; i++) {
+// 8 × 4MB @ 2MB/s 理论耗时约 15s，等待上限必须留足余量（原 15s 正好卡在边界，导致偶发 7/8）
+for (let i = 0; i < 600; i++) {
   await sleep(50);
   const n = [...e.tasks.values()].filter((t) => t.status === 'downloading').length;
   peak = Math.max(peak, n);

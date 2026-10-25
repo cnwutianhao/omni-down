@@ -161,17 +161,18 @@ export class TorrentEngine extends EventEmitter {
 
   // -------------------------------------------------- 全局限速（借鉴迅雷 GlobalVIPThreshold 模型）
 
-  /** 设置全局下载/上传限速（字节/秒，-1 = 不限速） */
+  /**
+   * 设置全局下载/上传限速（字节/秒，-1 = 不限速）。
+   * 不在这里发提示：启动时恢复设置也会调用本方法，提示由 IPC 层在用户主动修改时发出。
+   */
   setSpeedLimit(downBytes, upBytes) {
     if (!this.client) return false;
+    const down = Number.isFinite(downBytes) ? downBytes : -1;
+    const up = Number.isFinite(upBytes) ? upBytes : -1;
     try {
-      this.client.downloadLimit = Number.isFinite(downBytes) ? downBytes : -1;
-      this.client.uploadLimit = Number.isFinite(upBytes) ? upBytes : -1;
-      this.limits = { down: downBytes, up: upBytes };
-      this.emit('notice', {
-        type: 'info',
-        text: `限速已更新：↓ ${downBytes < 0 ? '不限' : Math.round(downBytes / 1024) + ' KB/s'} · ↑ ${upBytes < 0 ? '不限' : Math.round(upBytes / 1024) + ' KB/s'}`
-      });
+      this.client.downloadLimit = down;
+      this.client.uploadLimit = up;
+      this.limits = { down, up };
       return true;
     } catch (err) {
       this.emit('notice', { type: 'error', text: `限速设置失败：${err.message}` });

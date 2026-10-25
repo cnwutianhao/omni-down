@@ -141,6 +141,7 @@ export class HttpEngine extends EventEmitter {
     if (!['probing', 'queued', 'downloading'].includes(task.status)) return false;
     task._pauseRequested = true;
     task._starting = false; // 释放调度预留的名额，让排队任务能补上
+    task._run = (task._run || 0) + 1; // 作废当前轮次
     this._abortTask(task);
     this._closeFd(task);
     task.status = 'paused';
@@ -169,6 +170,7 @@ export class HttpEngine extends EventEmitter {
     if (!task) return false;
     task._removeRequested = true;
     task._pauseRequested = true;
+    task._run = (task._run || 0) + 1;
     this._abortTask(task);
     this._closeFd(task);
     this.tasks.delete(String(id));
@@ -245,7 +247,7 @@ export class HttpEngine extends EventEmitter {
 
     if (task._pauseRequested || task._removeRequested) return;
 
-    task.filename = this._uniquePath(task.dir, task.filename);
+    task.filename = this._uniquePath(task.dir, task.filename, task.id);
     task.status = 'paused';
     this._saveStateSoon(true);
     this._schedule(task.id, 30);
@@ -295,6 +297,9 @@ export class HttpEngine extends EventEmitter {
   async _download(task) {
     // 双重检查：调度延迟期间用户可能已暂停/删除
     if (task._pauseRequested || task._removeRequested) return;
+    // 运行代号：pause/remove 会递增它，旧一轮的 pump 发现代号变化后自行退出，
+    // 防止「暂停→快速恢复」时旧连接写入新 fd、重复计数或关掉新一轮的 fd
+    const run = (task._run = (task._run || 0) + 1);
     task.status = 'downloading';
     task.error = null;
     task._pauseRequested = false;
@@ -309,12 +314,15 @@ export class HttpEngine extends EventEmitter {
           task.received = 0;
         }
         if (!task.chunks.length) this._openChunks(task);
+        // 恢复时从 chunks 重算总量，避免下方 _pump 累加时重复计数
+        else task.received = task.chunks.reduce((a, c) => a + c.received, 0);
         task._fd = fs.openSync(partPath, fs.existsSync(partPath) ? 'r+' : 'w');
         fs.ftruncateSync(task._fd, task.size);
 
         const pending = task.chunks.filter((c) => c.received < c.length);
         task._activeConns = pending.length;
-        await Promise.all(pending.map((c) => this._pumpWithRetry(task, c)));
+        await Promise.all(pending.map((c) => this._pumpWithRetry(task, c, run)));
+        if (task._run !== run) return; // 已被暂停/删除并可能开始新一轮
         task._activeConns = 0;
 
         if (task.received !== task.size) {
@@ -326,13 +334,15 @@ export class HttpEngine extends EventEmitter {
         // 未知大小：单流追加模式（无法断点，中断后重来）
         task._fd = fs.openSync(partPath, 'w');
         task.received = 0;
-        await this._pumpStream(task);
+        await this._pumpStream(task, run);
+        if (task._run !== run) return;
         task.size = task.received;
         this._finish(task);
       }
     } catch (err) {
+      // 过期轮次或主动中断：静默退出，不碰状态（新一轮可能已在运行）
+      if (task._run !== run || task._pauseRequested || task._removeRequested) return;
       task._activeConns = 0;
-      if (task._pauseRequested || task._removeRequested) return; // 主动中断，静默
       // 服务器谎报支持 Range → 降级为单流重试一次
       if (/不支持断点/.test(err.message) && !task._fellBack) {
         task._fellBack = true;
@@ -350,9 +360,12 @@ export class HttpEngine extends EventEmitter {
         text: `下载失败：${task.filename || task.url} — ${err.message}`
       });
     } finally {
-      this._closeFd(task);
-      this._saveStateSoon(true);
-      this._promoteQueue();
+      // 只有当前轮次才能关 fd / 提升队列，避免关掉新一轮刚打开的 fd
+      if (task._run === run) {
+        this._closeFd(task);
+        this._saveStateSoon(true);
+        this._promoteQueue();
+      }
     }
   }
 
@@ -373,13 +386,14 @@ export class HttpEngine extends EventEmitter {
   }
 
   /** 单块下载 + 指数退避重试 */
-  async _pumpWithRetry(task, chunk) {
+  async _pumpWithRetry(task, chunk, run) {
     let attempt = 0;
     while (chunk.received < chunk.length) {
+      if (task._run !== run) throw new Error('aborted');
       try {
-        await this._pump(task, chunk);
+        await this._pump(task, chunk, run);
       } catch (err) {
-        if (task._pauseRequested || task._removeRequested) throw new Error('aborted');
+        if (task._run !== run || task._pauseRequested || task._removeRequested) throw new Error('aborted');
         attempt++;
         if (attempt > RETRY_MAX) throw err;
         const delay = Math.min(1000 * 2 ** (attempt - 1), 30000);
@@ -389,7 +403,7 @@ export class HttpEngine extends EventEmitter {
   }
 
   /** 拉取一个块的剩余区间 */
-  async _pump(task, chunk) {
+  async _pump(task, chunk, run) {
     const ctrl = new AbortController();
     task._abortControllers.add(ctrl);
     try {
@@ -412,6 +426,7 @@ export class HttpEngine extends EventEmitter {
         const { done, value } = await reader.read();
         if (done) break;
         await this._throttle(value.length);
+        if (task._run !== run) throw new Error('aborted'); // 限速等待期间被暂停
         fs.writeSync(task._fd, value, 0, value.length, pos);
         pos += value.length;
         chunk.received = pos - chunk.start;
@@ -425,7 +440,7 @@ export class HttpEngine extends EventEmitter {
   }
 
   /** 未知大小的单流下载 */
-  async _pumpStream(task) {
+  async _pumpStream(task, run) {
     const ctrl = new AbortController();
     task._abortControllers.add(ctrl);
     try {
@@ -440,6 +455,7 @@ export class HttpEngine extends EventEmitter {
         const { done, value } = await reader.read();
         if (done) break;
         await this._throttle(value.length);
+        if (task._run !== run) throw new Error('aborted');
         fs.writeSync(task._fd, value);
         task.received += value.length;
         task._bytesThisTick += value.length;
@@ -450,12 +466,22 @@ export class HttpEngine extends EventEmitter {
     }
   }
 
+  /**
+   * 收尾：校验字节数并把 .part 改名为最终文件。
+   * 任一步失败都抛错，由 _download 的 catch 标记为 error（保留 .part，可点继续重试），
+   * 而不是假装完成——否则下次启动发现最终文件不存在会清空进度从头重下。
+   */
   _finish(task) {
     this._closeFd(task);
+    if (task.size > 0 && task.received !== task.size) {
+      throw new Error(`数据不完整（${task.received}/${task.size} 字节）`);
+    }
     const finalPath = path.join(task.dir, task.filename);
     try {
       fs.renameSync(this._partPathOf(task), finalPath);
-    } catch { /* rename 失败不影响完成状态 */ }
+    } catch (err) {
+      throw new Error(`保存文件失败：${err.code || err.message}`);
+    }
     task.status = 'done';
     task.completedAt = Date.now();
     task.speed = 0;
@@ -543,15 +569,28 @@ export class HttpEngine extends EventEmitter {
   }
 
   /** 重名处理：name.ext → name (1).ext → name (2).ext … */
-  _uniquePath(dir, name) {
+  /**
+   * 分配不冲突的文件名。除了磁盘上的最终文件，还要避开：
+   * - 同目录下其他任务已占用的文件名（并发添加同一 URL 时，它们都还没落盘）
+   * - 残留的 .part 文件
+   * 否则多个任务会共用同一个 .part，互相覆盖。
+   */
+  _uniquePath(dir, name, selfId) {
     if (!name) name = `download-${Date.now()}`;
-    let candidate = path.join(dir, name);
-    if (!fs.existsSync(candidate)) return name;
+    const taken = new Set();
+    for (const t of this.tasks.values()) {
+      if (t.id !== selfId && t.dir === dir && t.filename) taken.add(t.filename);
+    }
+    const free = (n) =>
+      !taken.has(n) &&
+      !fs.existsSync(path.join(dir, n)) &&
+      !fs.existsSync(path.join(dir, n + '.part'));
+    if (free(name)) return name;
     const ext = path.extname(name);
     const base = name.slice(0, name.length - ext.length);
     for (let i = 1; i < 999; i++) {
-      candidate = path.join(dir, `${base} (${i})${ext}`);
-      if (!fs.existsSync(candidate)) return `${base} (${i})${ext}`;
+      const n = `${base} (${i})${ext}`;
+      if (free(n)) return n;
     }
     return `${base}-${Date.now()}${ext}`;
   }

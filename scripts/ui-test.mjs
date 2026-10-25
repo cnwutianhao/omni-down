@@ -64,9 +64,10 @@ const afterAdd = await evaluate(`JSON.stringify({
 })`);
 console.log('  ', afterAdd);
 
-console.log('━━━ 步骤 3：等待元数据解析与 peer 连接（最多 40 秒）━━━');
+// 元数据解析依赖公网 DHT / tracker，冷启动时 40 秒偶尔不够，上限留到 90 秒
+console.log('━━━ 步骤 3：等待元数据解析与 peer 连接（最多 90 秒）━━━');
 let finalState = null;
-for (let i = 0; i < 20; i++) {
+for (let i = 0; i < 45; i++) {
   await new Promise((r) => setTimeout(r, 2000));
   const state = JSON.parse(
     await evaluate(`JSON.stringify({

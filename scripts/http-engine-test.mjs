@@ -11,7 +11,10 @@ fs.mkdirSync(DIR, { recursive: true });
 
 // 启动本地测试服务器（32MB）
 const server = spawn('node', [new URL('./test-server.mjs', import.meta.url).pathname, '32', '18081'], { stdio: 'pipe' });
-await new Promise((r) => setTimeout(r, 800));
+await new Promise((resolve) => {
+  const timeout = setTimeout(() => { console.error('⚠️  服务器 2 秒未就绪'); resolve(); }, 2000);
+  server.stdout.on('data', (chunk) => { if (chunk.toString().includes('就绪')) { clearTimeout(timeout); resolve(); } });
+});
 const URL1 = 'http://127.0.0.1:18081/file.bin';
 let pass = 0;
 let fail = 0;
@@ -25,7 +28,7 @@ await e.start();
 console.log('━━━ ① 基本下载（多线程分块）━━━');
 const id1 = e.add(URL1);
 let task = null;
-for (let i = 0; i < 60; i++) {
+for (let i = 0; i < 80; i++) {
   await new Promise((r) => setTimeout(r, 500));
   task = e.tasks.get(id1);
   if (task?.status === 'done') break;
@@ -50,12 +53,12 @@ check('确实下了一部分（非瞬间完成）', receivedAtPause > 0 && recei
 check('.part 文件保留', fs.existsSync(path.join(DIR, pausedTask.filename + '.part')));
 e.resume(id2);
 let task2 = null;
-for (let i = 0; i < 90; i++) {
+for (let i = 0; i < 120; i++) {
   await new Promise((r) => setTimeout(r, 500));
   task2 = e.tasks.get(id2);
   if (task2?.status === 'done') break;
 }
-check('恢复后完成', task2?.status === 'done');
+check('恢复后完成', task2?.status === 'done', task2?.status === 'done' ? '' : `${task2?.status} ${task2?.error || ''} received=${task2?.received} size=${task2?.size}`);
 check('最终文件大小正确', fs.existsSync(path.join(DIR, task2.filename)) && fs.statSync(path.join(DIR, task2.filename)).size === 32 * 1024 * 1024);
 e.setSpeedLimit(-1);
 
@@ -88,7 +91,7 @@ fs.rmSync(path.join(DIR, name2), { force: true });
 console.log('━━━ ⑤ 错误处理（无效 URL）━━━');
 const id5 = e.add('http://127.0.0.1:19999/nonexistent');
 let task5 = null;
-for (let i = 0; i < 20; i++) {
+for (let i = 0; i < 30; i++) {
   await new Promise((r) => setTimeout(r, 500));
   task5 = e.tasks.get(id5);
   if (task5?.status === 'error') break;

@@ -23,8 +23,12 @@ const URL_BAD = 'http://127.0.0.1:19999/x';
 // ---------- 环境准备 ----------
 fs.rmSync(DIR, { recursive: true, force: true });
 fs.mkdirSync(DIR, { recursive: true });
-const server = spawn('node', [new URL('./test-server.mjs', import.meta.url).pathname, '1', '18082'], { stdio: 'ignore' });
-await new Promise((r) => setTimeout(r, 700));
+const server = spawn('node', [new URL('./test-server.mjs', import.meta.url).pathname, '1', '18082'], { stdio: 'pipe' });
+await new Promise((resolve) => {
+  const timeout = setTimeout(() => { console.error('⚠️  服务器 2 秒未就绪'); resolve(); }, 2000);
+  server.stdout.on('data', (chunk) => { if (chunk.toString().includes('就绪')) { clearTimeout(timeout); resolve(); } });
+  server.stderr.on('data', () => {});
+});
 
 const engine = new HttpEngine({ downloadDir: DIR, stateFile: STATE });
 await engine.start();

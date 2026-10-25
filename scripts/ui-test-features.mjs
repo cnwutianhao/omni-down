@@ -23,8 +23,9 @@ console.log('  ', await evalx(`JSON.stringify({
   speedBtn: !!document.getElementById('speed-btn'),
   speedModal: !!document.getElementById('speed-modal'),
   filesModal: !!document.getElementById('files-modal'),
-  playBtnInTpl: !!document.querySelector('#row-template .act-play'),
-  filesBtnInTpl: !!document.querySelector('#row-template .act-files')
+  // <template> 的子节点在 .content（DocumentFragment）里，document.querySelector 查不到
+  playBtnInTpl: !!document.getElementById('row-template').content.querySelector('.act-play'),
+  filesBtnInTpl: !!document.getElementById('row-template').content.querySelector('.act-files')
 })`));
 
 console.log('━━━ ② 限速弹窗交互 ━━━');
@@ -50,7 +51,8 @@ console.log('━━━ ③ 添加种子 → 播放/文件按钮出现 ━━━'
 await evalx(`document.getElementById('magnet-input').value = 'magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10&dn=Sintel'`);
 await evalx(`document.getElementById('add-btn').click()`);
 let ready = false;
-for (let i = 0; i < 30; i++) {
+// 播放按钮要等元数据解析完才出现，依赖公网 peer，上限 120 秒
+for (let i = 0; i < 60; i++) {
   await new Promise((r) => setTimeout(r, 2000));
   const st = JSON.parse(await evalx(`JSON.stringify({
     rows: document.querySelectorAll('.row').length,

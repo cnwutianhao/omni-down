@@ -1,5 +1,9 @@
 // 验证新功能：限速、文件选择、流媒体服务器
+import { rmSync } from 'node:fs';
 import { TorrentEngine } from '../src/main/torrent-engine.js';
+
+// 上次运行留下的 state.json 会恢复同一个种子，导致 add 报"任务已存在"，每次从干净目录开始
+rmSync('/tmp/tf-features', { recursive: true, force: true });
 
 const e = new TorrentEngine({
   downloadDir: '/tmp/tf-features',

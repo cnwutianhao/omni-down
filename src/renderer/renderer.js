@@ -130,11 +130,25 @@ function statusOf(t) {
   return t.ready === false ? 'meta' : 'active';
 }
 
+/** 是否算「下载中」：失败的 HTTP 任务既没完成也没暂停，但不应计入 */
+function isActive(t) {
+  const s = statusOf(t);
+  return s === 'active' || s === 'meta';
+}
+
 function visible(t) {
-  if (state.filter === 'active') return !t.done && !t.paused;
+  if (state.filter === 'active') return isActive(t);
   if (state.filter === 'done') return t.done;
   if (state.filter === 'paused') return t.paused;
   return true;
+}
+
+/** 可直接添加的链接：磁力 / 40 位 info hash / HTTP(S) 直链（与主进程 t:add-magnet 的判定一致） */
+const LINK_RE = /^(magnet:\?|https?:\/\/\S+$|[a-f0-9]{40}$)/i;
+/** 文本里的第一个词像不像链接（支持多条链接用空白分隔，交给主进程逐条解析） */
+function looksLikeLink(text) {
+  const first = String(text || '').trim().split(/[\s,，]+/)[0];
+  return !!first && LINK_RE.test(first);
 }
 
 function createRow(t) {
@@ -279,7 +293,6 @@ function updateRow(entry, t) {
               : '下载中';
   refs.badge.textContent = badgeText;
 
-  const done = t.length ? (t.downloaded + (t.done ? 0 : 0)) : 0;
   refs.size.textContent = t.length
     ? `${fmtBytes(Math.min(t.downloaded, t.length))} / ${fmtBytes(t.length)}`
     : '大小未知';
@@ -338,8 +351,6 @@ function updateRow(entry, t) {
   refs.toggle.innerHTML = t.paused
     ? `<svg viewBox="0 0 16 16" width="15" height="15"><path d="M4.5 2.8 13 8l-8.5 5.2z" fill="currentColor"/></svg>`
     : `<svg viewBox="0 0 16 16" width="15" height="15"><rect x="4" y="3" width="2.6" height="10" rx="1" fill="currentColor"/><rect x="9.4" y="3" width="2.6" height="10" rx="1" fill="currentColor"/></svg>`;
-
-  void done;
 }
 
 function render() {
@@ -397,7 +408,7 @@ function render() {
   }
 
   // 状态栏
-  const active = all.filter((t) => !t.done && !t.paused).length;
+  const active = all.filter(isActive).length;
   el.statusText.textContent = active ? `${active} 个任务下载中` : '空闲';
   el.statusHint.textContent = `${fmtSpeed(state.stats.downloadSpeed)} ↓ · ${fmtSpeed(state.stats.uploadSpeed)} ↑`;
 }
@@ -462,12 +473,20 @@ function openFilesModal(t, mode) {
   for (const f of t.fileDetails || []) {
     const item = document.createElement('label');
     item.className = `file-item${f.selected ? '' : ' skipped'}`;
-    item.innerHTML = `
-      <input type="checkbox" data-index="${f.index}" ${f.selected ? 'checked' : ''} />
-      <span class="f-name" title="${f.name}">${f.name}</span>
-      <span class="f-prog">${Math.round((f.progress || 0) * 100)}%</span>
-      <span class="f-size">${fmtBytes(f.size)}</span>`;
-    const cb = item.querySelector('input');
+    // 文件名来自种子内容（不可信），一律用 textContent / 属性赋值，不拼进 innerHTML
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.index = String(f.index);
+    cb.checked = !!f.selected;
+    const span = (cls, text) => {
+      const s = document.createElement('span');
+      s.className = cls;
+      s.textContent = text;
+      return s;
+    };
+    const nameSpan = span('f-name', f.name);
+    nameSpan.title = f.name;
+    item.append(cb, nameSpan, span('f-prog', `${Math.round((f.progress || 0) * 100)}%`), span('f-size', fmtBytes(f.size)));
     cb.addEventListener('change', () => {
       filesEditing.selections.set(Number(cb.dataset.index), cb.checked);
       item.classList.toggle('skipped', !cb.checked);
@@ -691,9 +710,10 @@ document.addEventListener('keydown', (e) => {
     closeModals();
   }
   if (e.key === 'v' && (e.metaKey || e.ctrlKey)) {
-    // ⌘V 时如剪贴板是磁力链接，自动填入待确认
+    // ⌘V 时如剪贴板是可下载链接，自动填入待确认（焦点已在输入框时交给系统粘贴，避免重复）
+    if (document.activeElement === el.input) return;
     navigator.clipboard.readText().then((txt) => {
-      if (/^magnet:\?/i.test(txt.trim()) && !el.input.value.trim()) {
+      if (looksLikeLink(txt) && !el.input.value.trim()) {
         el.input.value = txt.trim();
         toast('已从剪贴板填入下载链接，按回车添加', 'info', 2600);
       }
@@ -714,7 +734,7 @@ window.addEventListener('drop', async (e) => {
   document.body.classList.remove('dragover');
 
   const text = e.dataTransfer.getData('text/plain');
-  if (text && /magnet:\?/i.test(text)) {
+  if (looksLikeLink(text)) {
     const res = await api.addMagnet(text.trim());
     if (res.ok) toast('已从拖放的链接添加任务', 'success');
     else toast(res.error || '添加失败', 'error');
