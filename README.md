@@ -8,19 +8,22 @@
 
 - ✅ 粘贴链接即下载：HTTP/HTTPS 直链、磁力链接、40 位 info hash 混贴均可（一次多个）
 - ✅ 打开或拖入 `.torrent` 文件（支持多选）
-- ✅ 拖动磁力链接文本到窗口即可添加
+- ✅ 拖动链接文本到窗口即可添加（磁力 / HTTP 直链均可）
 - ✅ 实时进度环、下载/上传速度、连接数、剩余时间（动态单位：天/小时/分/秒）
-- ✅ 暂停 / 继续任务
-- ✅ **全局限速**（下载/上传分别设置，重启保留）
+- ✅ 暂停 / 继续任务，HTTP 任务支持断点续传
+- ✅ **全局限速**（下载/上传分别设置，重启保留，同时作用于 BT 与 HTTP）
 - ✅ **文件选择下载**（多文件任务可勾选只下需要的文件）
 - ✅ **边下边播**（下载中即可用系统播放器播放，本地 HTTP 流媒体）
 - ✅ 卡住原因智能提示（死种/分享者离线/带宽受限自动诊断）
+- ✅ 速度图表（5 分钟 / 30 分钟 / 6 小时 / 12 小时 / 24 小时五档时间窗）
+- ✅ 磁盘剩余空间监控（低于 2GB 警告、低于 500MB 严重告警）
+- ✅ 做种限制（按分享率或做种时长自动停止 / 移除）
 - ✅ 自定义下载目录（记忆上次选择）
 - ✅ 打开所在文件夹 / 定位文件（macOS 访达 · Windows 资源管理器 · Linux 默认文件管理器）
 - ✅ 移除任务（可选是否删除已下载文件）
 - ✅ 退出后自动保存任务列表，下次启动自动恢复
-- ✅ ⌘V（macOS）/ Ctrl+V（Windows、Linux）自动识别剪贴板中的磁力链接
-- ✅ 点击任务名可复制磁力链接
+- ✅ ⌘V（macOS）/ Ctrl+V（Windows、Linux）自动识别剪贴板中的下载链接
+- ✅ 点击任务名可复制下载链接（BT 复制磁力链接，HTTP 复制直链）
 
 ## 开发运行
 
@@ -42,6 +45,39 @@ Ubuntu / Debian 上如遇启动失败，先装一遍：
 sudo apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
   libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 libpangocairo-1.0-0
 ```
+
+## 测试
+
+测试脚本不用测试框架，直接 `node scripts/xxx.mjs` 运行。
+
+| 脚本 | 覆盖内容 |
+|---|---|
+| `repro-p0-p1.mjs` | 并发保存崩溃 / 小限速死锁 / 图表时间窗 / deselected 恢复 |
+| `repro-schedule-restart.mjs` | 批量添加不突破并发上限 / stop 后再 start 能恢复 |
+| `http-engine-test.mjs` | HTTP 引擎：分块、断点续传、限速、重名、错误处理、持久化 |
+| `qb-features-test.mjs` | 磁盘监控 / 速度历史 / 做种限制 |
+| `verify-features.mjs` | BT 文件选择 / 流媒体服务器 |
+| `stability-test.mjs` | HTTP 引擎 N 轮混合场景压测（默认 100 轮） |
+| `ui-test.mjs` / `ui-test-features.mjs` | UI 自动化（需以 `--remote-debugging-port=9222` 启动应用） |
+| `ui-stress.mjs` | 桌面端端到端压测（真实 UI 操作、并发与暂停、内存/DOM 趋势） |
+
+改引擎代码后至少跑：
+
+```bash
+node scripts/repro-p0-p1.mjs && node scripts/repro-schedule-restart.mjs && \
+node scripts/http-engine-test.mjs && node scripts/stability-test.mjs 50
+```
+
+桌面端压测需要另起本地测试服务器和带调试端口的应用（用独立数据目录，不影响日常任务）：
+
+```bash
+node scripts/test-server.mjs 8 18090 &
+./node_modules/.bin/electron . --remote-debugging-port=9222 --user-data-dir=/tmp/omnidown-stress-ud &
+node scripts/ui-stress.mjs 200 18090
+```
+
+> `ui-test.mjs` / `ui-test-features.mjs` 需要公网 DHT/tracker 解析真实种子的元数据；
+> `ui-stress.mjs` 只覆盖 HTTP 直链（本地测试服务器），不依赖外网。
 
 ## 打包成桌面应用
 
