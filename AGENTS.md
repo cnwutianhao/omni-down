@@ -123,13 +123,33 @@ node scripts/ui-stress.mjs 200 18090
 
 ## 打包
 
+本地打包（只能打当前系统 + 当前架构）：
+
 ```bash
-npm run dist        # mac（本机架构）
+npm run dist        # mac（本机架构，产出 dmg）
 npm run dist:win    # Windows（需在 Windows 上跑）
-npm run dist:linux  # Linux（需在 Linux 上跑）
+npm run dist:linux  # Linux（AppImage + deb + rpm）
 ```
 
-- 国内网络需要：`export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`
+### 目标矩阵（CI 全量产出）
+
+`.github/workflows/build.yml` 用手动触发 / 推 main / 打 tag 三种方式构建下列 5 个 job：
+
+| 平台 | 架构 | Runner | 产物 |
+|---|---|---|---|
+| macOS | x64（Intel） | `macos-15-intel` | `.dmg` |
+| macOS | arm64（Apple M） | `macos-15` | `.dmg` |
+| Windows | x64 | `windows-2025` | NSIS `.exe` |
+| Windows | arm64 | `windows-11-arm` | NSIS `.exe` |
+| Linux | x64 | `ubuntu-22.04` | `.AppImage` + `.deb` + `.rpm` |
+
+- **.deb 与 .rpm 覆盖不同发行版**：deb 面向 Debian 系（Ubuntu / Debian / Mint / Kali），rpm 面向 Red Hat 系（RHEL / Fedora / CentOS Stream / Rocky / Alma / openSUSE）；AppImage 与发行版无关，作为通用免安装包
+- 架构参数必须写成独立的 `--x64` / `--arm64`，**不能写 `--mac x64`**（会被当成 target 名报 `Unknown target: x64`）
+- `artifactName` 统一带 `${os}-${arch}`：两个 mac job 默认都产出 `OmniDown-1.0.0.dmg`，不加后缀会互相覆盖
+- Windows ARM64 的 `bufferutil` / `utf-8-validate` / `utp-native` 没有 win32-arm64 预编译包，属于 optional 依赖会被跳过；`ws` 与 `webtorrent` 内部 try/catch 回退到纯 JS 实现，功能正常、CPU 略高
+- 产出的包都未签名：macOS 需 `xattr -cr`，Windows 会触发 SmartScreen
+
+- 国内网络需要：`export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`；GitHub runner 上反而应改回官方地址（工作流里已设置）
 - Electron 不支持交叉打包（原生模块），各平台各自打
 - 图标：`build/icon.png`（2048px master，8-bit RGBA）/ `build/icon.ico`（Windows，含 16/24/32/48/64/128/256 七种尺寸）
   - `scripts/gen-icon-ico.mjs` 从 `icon.png` 重新生成多尺寸 ICO，**纯 Node 实现（只用内置 zlib），三平台都能跑**。
