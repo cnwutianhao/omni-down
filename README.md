@@ -84,10 +84,10 @@ node scripts/ui-stress.mjs 200 18090
 各平台分别打包（Electron 不支持交叉打包，见下方说明）：
 
 ```bash
-npm run dist        # macOS：生成 OmniDown.app（release/mac/）
-npm run dist-dmg    # macOS：生成 .dmg 安装包
+npm run dist        # macOS：生成本机架构的 .dmg
+npm run dist-dmg    # macOS：同上（保留的别名）
 npm run dist:win    # Windows：生成 NSIS 安装包（release/*.exe）
-npm run dist:linux  # Linux：生成 AppImage + deb
+npm run dist:linux  # Linux：生成 AppImage + deb + rpm
 ```
 
 > **为什么不能一个平台打三个包？**
@@ -98,16 +98,33 @@ npm run dist:linux  # Linux：生成 AppImage + deb
 > （`Build for macOS is supported only on macOS`），遇到第一个不支持的目标就中止，
 > 不会退化成「只打当前平台」。
 >
-> 想一次性产出三平台安装包，只能在三个系统上分别执行，或用 CI（如 GitHub Actions）
-> 在各自的原生 runner 上并行构建 —— 但需要自备仓库和账号，本项目未附带工作流配置。
+> 想一次性产出全部安装包，用仓库自带的 GitHub Actions 工作流
+> （`.github/workflows/build.yml`）：在 Actions 页手动触发或推送 `v*` tag 即可。
+
+### 发布矩阵
+
+CI 按下面的组合产出安装包：
+
+| 平台 | 架构 | 产物 | 适用设备 / 发行版 |
+|---|---|---|---|
+| macOS | x64 | `.dmg` | Intel 芯片 Mac |
+| macOS | arm64 | `.dmg` | Apple M 系列芯片 Mac |
+| Windows | x64 | NSIS `.exe` | 绝大多数 Windows 10 / 11 |
+| Windows | arm64 | NSIS `.exe` | 骁龙等 ARM 架构 Windows 设备 |
+| Linux | x64 | `.AppImage` | 任何 x64 发行版，免安装 |
+| Linux | x64 | `.deb` | Debian 系：Ubuntu / Debian / Mint / Kali |
+| Linux | x64 | `.rpm` | Red Hat 系：RHEL / Fedora / Rocky / Alma / openSUSE |
+
+> `dpkg -i` 装 `.deb`，`sudo rpm -i` 或 `dnf install ./xxx.rpm` 装 `.rpm`；
+> AppImage 与发行版无关，`chmod +x` 后直接运行。
 
 各平台安装方式：
 
 | 平台 | 产物 | 安装 / 运行方式 |
 |---|---|---|
-| macOS | `release/mac/OmniDown.app`、`.dmg` | 把 `OmniDown.app` 拖到 `/Applications` 后双击；未签名版本首次运行需执行 `xattr -cr /Applications/OmniDown.app` |
+| macOS | `release/*.dmg` | 打开 dmg 把 `OmniDown.app` 拖到 `/Applications`；未签名版本首次运行需执行 `xattr -cr /Applications/OmniDown.app` |
 | Windows | `release/*.exe`（NSIS） | 双击安装包按向导安装；未签名版本首次运行会被 SmartScreen 拦截，需点「更多信息 → 仍要运行」 |
-| Linux | `release/*.AppImage`、`.deb` | AppImage：`chmod +x` 后直接运行；deb：`sudo dpkg -i <包名>.deb` |
+| Linux | `release/*.AppImage`、`.deb`、`.rpm` | AppImage：`chmod +x` 后直接运行；deb：`sudo dpkg -i <包名>.deb`；rpm：`sudo dnf install ./<包名>.rpm` |
 
 ## 项目结构
 
@@ -160,7 +177,7 @@ src/
 | 剪贴板自动识别 | ⌘V | Ctrl+V | Ctrl+V |
 | 用户数据目录 | `~/Library/Application Support/OmniDown/` | `%APPDATA%\OmniDown\` | `~/.config/OmniDown/` |
 | 默认下载目录 | `~/Downloads/OmniDown/` | `%USERPROFILE%\Downloads\OmniDown\` | `~/Downloads/OmniDown/` |
-| 打包产物 | `.app` / `.dmg` | NSIS `.exe` | `.AppImage` / `.deb` |
+| 打包产物 | `.dmg`（x64 / arm64） | NSIS `.exe`（x64 / arm64） | `.AppImage` / `.deb` / `.rpm`（x64） |
 | 应用图标 | `build/icon.png` | `build/icon.ico`（多尺寸） | `build/icon.png` |
 
 > 界面字体栈已包含 macOS（`-apple-system` / `SF Pro Text` / `PingFang SC`）、
