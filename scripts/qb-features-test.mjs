@@ -4,6 +4,7 @@ import { SpeedHistory } from '../src/main/speed-history.js';
 import { TorrentEngine } from '../src/main/torrent-engine.js';
 import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 
 let pass = 0;
 let fail = 0;
@@ -44,7 +45,7 @@ const downsampled = sh.series('5m', 120);
 check('降采样到 120 点', downsampled.length === 120, `${downsampled.length}`);
 
 console.log('━━━ ③ 做种限制（qBittorrent: ShareLimitAction）━━━');
-const DIR = '/tmp/tf-qb-test';
+const DIR = path.join(os.tmpdir(), 'tf-qb-test');
 fs.rmSync(DIR, { recursive: true, force: true });
 const e = new TorrentEngine({ downloadDir: DIR, stateFile: DIR + '/state.json' });
 e.setShareLimits({ maxRatio: 1.5, maxSeedingMinutes: 120, action: 'stop' });

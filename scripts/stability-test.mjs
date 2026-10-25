@@ -12,9 +12,10 @@
 import { HttpEngine } from '../src/main/http-engine.js';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
-const DIR = '/tmp/tf-stability';
+const DIR = path.join(os.tmpdir(), 'tf-stability');
 const STATE = path.join(DIR, 'state.json');
 const ROUNDS = Number(process.argv[2]) || 100;
 const URL_OK = 'http://127.0.0.1:18082/stability.bin';

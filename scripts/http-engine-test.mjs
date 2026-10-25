@@ -2,9 +2,10 @@
 import { HttpEngine } from '../src/main/http-engine.js';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
-const DIR = '/tmp/tf-http-test';
+const DIR = path.join(os.tmpdir(), 'tf-http-test');
 const STATE = path.join(DIR, 'state.json');
 fs.rmSync(DIR, { recursive: true, force: true });
 fs.mkdirSync(DIR, { recursive: true });

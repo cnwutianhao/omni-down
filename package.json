@@ -3,6 +3,11 @@
   "productName": "OmniDown",
   "version": "1.0.0",
   "description": "全能下载器：BT 磁力链接 + HTTP 直链",
+  "author": {
+    "name": "Tyhoo Wu",
+    "email": "cnwutianhao@gmail.com"
+  },
+  "homepage": "https://github.com/cnwutianhao/omni-down",
   "type": "module",
   "main": "src/main/main.js",
   "license": "MIT",
@@ -40,24 +45,22 @@
     ],
     "mac": {
       "target": [
-        "dir"
+        "dmg"
       ],
       "category": "public.app-category.utilities",
       "icon": "build/icon.png"
     },
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        }
+        "nsis"
       ],
       "icon": "build/icon.ico"
     },
     "linux": {
       "target": [
         "AppImage",
-        "deb"
+        "deb",
+        "rpm"
       ],
       "category": "Network;FileTransfer",
       "icon": "build/icon.png"
