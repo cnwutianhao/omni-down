@@ -1,7 +1,7 @@
 # OmniDown ⬇️
 
-一个基于 **Electron + WebTorrent** 的全能下载器：BT 磁力链接 + HTTP 直链双引擎。
-完整支持 **macOS / Windows / Linux** 三平台，界面与功能一致，仅系统集成细节随平台自动适配
+一个基于 Electron + WebTorrent 的全能下载器：BT 磁力链接 + HTTP 直链双引擎。
+完整支持 macOS / Windows / Linux 三平台，界面与功能一致，仅系统集成细节随平台自动适配
 （详见「[平台适配](#平台适配)」）。
 
 ## 功能
@@ -11,9 +11,9 @@
 - ✅ 拖动链接文本到窗口即可添加（磁力 / HTTP 直链均可）
 - ✅ 实时进度环、下载/上传速度、连接数、剩余时间（动态单位：天/小时/分/秒）
 - ✅ 暂停 / 继续任务，HTTP 任务支持断点续传
-- ✅ **全局限速**（下载/上传分别设置，重启保留，同时作用于 BT 与 HTTP）
-- ✅ **文件选择下载**（多文件任务可勾选只下需要的文件）
-- ✅ **边下边播**（下载中即可用系统播放器播放，本地 HTTP 流媒体）
+- ✅ 全局限速（下载/上传分别设置，重启保留，同时作用于 BT 与 HTTP）
+- ✅ 文件选择下载（多文件任务可勾选只下需要的文件）
+- ✅ 边下边播（下载中即可用系统播放器播放，本地 HTTP 流媒体）
 - ✅ 卡住原因智能提示（死种/分享者离线/带宽受限自动诊断）
 - ✅ 速度图表（5 分钟 / 30 分钟 / 6 小时 / 12 小时 / 24 小时五档时间窗）
 - ✅ 磁盘剩余空间监控（低于 2GB 警告、低于 500MB 严重告警）
@@ -94,7 +94,7 @@ npm run dist:linux  # Linux：生成 AppImage + deb
 > Electron 原生模块（含 `node-datachannel`）是按平台和 CPU 架构编译的二进制，
 > electron-builder 无法交叉编译它们。因此 macOS / Windows / Linux 包都必须在对应系统上打。
 >
-> `npm run dist:all`（即 `electron-builder -mwl`）**在 macOS 以外的系统上会直接报错退出**
+> `npm run dist:all`（即 `electron-builder -mwl`）在 macOS 以外的系统上会直接报错退出
 > （`Build for macOS is supported only on macOS`），遇到第一个不支持的目标就中止，
 > 不会退化成「只打当前平台」。
 >
