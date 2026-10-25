@@ -64,6 +64,14 @@ build/                 # 打包资源：icon.png (mac/linux)、icon.ico (win)
 - **必须原子写**：先写 `.tmp` 再 `rename`，且 `_saveState` 有 `_saving` 互斥锁（并发写会损坏文件，已踩过坑）
 - HTTP 引擎的 `.part` 文件是断点续传载体，删除任务时记得清理
 
+### HTTP 引擎下载轮次
+
+- `task._run` 是运行代号：`_download` 开始时递增，`pause` / `remove` 也递增以作废当前轮次
+- 旧轮次的 pump 在 `await` 之后（尤其是限速等待后）必须检查 `task._run !== run` 并退出；`finally` 里只有当前轮次才能关 fd / 提升队列。否则「暂停→快速恢复」时旧连接会写入新 fd、重复计数 `received`
+- `_finish` 严格校验：字节数不符或 rename 失败都抛错走 error 状态（保留 `.part` 可重试），不要改回「假装完成」
+- `_uniquePath` 分配文件名时要同时避开磁盘文件、残留 `.part` 和其他任务已占用的名字（并发添加同一 URL 时都还没落盘，否则会共用同一个 `.part`）
+- 限速提示（notice）在 IPC 层发，引擎的 `setSpeedLimit` 保持静默（启动恢复设置时也会调用）
+
 ### UI 文案
 
 - 中性场景用「链接 / 任务 / 下载」；**只有 BT 专属语境才用**「磁力 / 种子 / 做种」
@@ -90,12 +98,28 @@ build/                 # 打包资源：icon.png (mac/linux)、icon.ico (win)
 | `repro-p0-p1.mjs` | 并发保存崩溃/小限速死锁/图表时间窗/deselected 恢复 4 项回归 |
 | `repro-schedule-restart.mjs` | HTTP 批量添加不突破并发上限 / stop 后再 start 能恢复 7 项回归 |
 | `ui-test.mjs` / `ui-test-features.mjs` | UI 自动化（需 `--remote-debugging-port=9222` 启动应用） |
+| `ui-stress.mjs` | 桌面端端到端压测（真实 UI 操作 + 并发/暂停 + 内存与 DOM 趋势，需调试端口） |
 | `test-server.mjs` | 本地测试 HTTP 服务器（压测依赖） |
+
+- 启动 `test-server.mjs` 后要等 stdout 输出「就绪」再发请求（2 秒兜底），不要用固定 `setTimeout` 硬等，机器负载高时会偶发连接失败
+- 轮询完成状态的等待上限要留足余量（慢机器 / CI），但竞态复现脚本里的精确时间窗不要随意放大
 
 改完引擎代码的最小验证集：
 ```bash
 node scripts/repro-p0-p1.mjs && node scripts/repro-schedule-restart.mjs && node scripts/http-engine-test.mjs && node scripts/stability-test.mjs 50
 ```
+
+桌面端压测（需另起测试服务器与带调试端口的应用，用独立 user-data-dir 避免污染真实任务列表）：
+
+```bash
+node scripts/test-server.mjs 8 18090 &
+./node_modules/.bin/electron . --remote-debugging-port=9222 --user-data-dir=/tmp/omnidown-stress-ud &
+node scripts/ui-stress.mjs 200 18090
+```
+
+- `ui-stress.mjs` 用应用自身的限速把单任务拉长到可观测（本地回环否则 ~100ms 就下完，暂停和并发上限都测不到）
+- 输入框是单行 `<input>`，多条链接用**空格**分隔（`\n` 会被吞掉）
+- 只覆盖 HTTP 直链；BT 依赖公网做种者，不适合做多轮压测
 
 ## 打包
 
